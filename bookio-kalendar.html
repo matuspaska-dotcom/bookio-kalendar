@@ -1,0 +1,866 @@
+<!DOCTYPE html>
+<html lang="sk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bookio – Rezervačný kalendár</title>
+<style>
+/* ── RESET ── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', sans-serif;
+  background: #F4F5F9;
+  color: #111827;
+  min-height: 100vh;
+  font-size: 14px;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ── APP WRAPPER ── */
+.app { max-width: 1160px; margin: 0 auto; padding: 24px 16px 80px; }
+
+/* ── TOPBAR ── */
+.topbar {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 20px; gap: 12px; flex-wrap: wrap;
+}
+.brand { font-size: 20px; font-weight: 800; letter-spacing: -0.5px; color: #111827; }
+.week-nav { display: flex; align-items: center; gap: 6px; }
+.nav-btn {
+  width: 32px; height: 32px; border: 1px solid #E5E7EB; border-radius: 7px;
+  background: #fff; cursor: pointer; font-size: 16px; color: #374151;
+  display: flex; align-items: center; justify-content: center;
+  transition: background .13s;
+}
+.nav-btn:hover { background: #F9FAFB; }
+.week-label {
+  font-size: 14px; font-weight: 600; color: #374151;
+  min-width: 155px; text-align: center;
+}
+.view-tabs { display: flex; gap: 4px; }
+.view-tab {
+  padding: 7px 16px; border-radius: 7px; font-size: 13px; font-weight: 500;
+  border: 1px solid #E5E7EB; background: #fff; cursor: pointer; color: #374151;
+  transition: background .13s;
+}
+.view-tab:hover { background: #F9FAFB; }
+.view-tab.active { background: #7C3AED; color: #fff; border-color: #7C3AED; }
+
+/* ── CALENDAR WRAPPER ── */
+.cal-wrap {
+  background: #fff; border-radius: 14px;
+  border: 1px solid #E5E7EB;
+  box-shadow: 0 1px 6px rgba(0,0,0,.05);
+  overflow: hidden;
+}
+
+/* ── HEADER ROW ── */
+.cal-head {
+  display: grid; grid-template-columns: 56px repeat(7, 1fr);
+  border-bottom: 1px solid #E5E7EB;
+  background: #fff; position: sticky; top: 0; z-index: 10;
+}
+.cal-head-spacer { border-right: 1px solid #E5E7EB; }
+.cal-day-head {
+  padding: 12px 6px 10px; text-align: center;
+  border-left: 1px solid #E5E7EB;
+}
+.day-abbr { font-size: 11px; font-weight: 600; color: #9CA3AF; text-transform: uppercase; letter-spacing: .6px; }
+.day-num { font-size: 22px; font-weight: 700; color: #111827; margin-top: 3px; line-height: 1; }
+.cal-day-head.is-today .day-num {
+  background: #7C3AED; color: #fff;
+  width: 36px; height: 36px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  margin: 3px auto 0; font-size: 18px;
+}
+
+/* ── CALENDAR BODY ── */
+.cal-body { display: grid; grid-template-columns: 56px repeat(7, 1fr); }
+
+/* Time column */
+.time-col { border-right: 1px solid #E5E7EB; }
+.time-tick {
+  height: 64px; display: flex; align-items: flex-start;
+  justify-content: flex-end; padding: 4px 8px 0 0;
+  font-size: 11px; color: #9CA3AF; font-weight: 500;
+  border-bottom: 1px solid #F3F4F6;
+}
+
+/* Day columns */
+.day-col { position: relative; border-left: 1px solid #F3F4F6; }
+.day-col.is-today { background: #FAFAFF; }
+.hour-slot { height: 64px; border-bottom: 1px solid #F3F4F6; }
+
+/* ── EVENT BLOCKS ── */
+.ev {
+  position: absolute; left: 4px; right: 4px;
+  border-radius: 7px; border: 1.5px solid;
+  padding: 5px 8px 6px; cursor: pointer;
+  overflow: hidden; transition: box-shadow .15s, transform .1s;
+  z-index: 2; user-select: none;
+}
+.ev:hover { box-shadow: 0 3px 14px rgba(0,0,0,.13); z-index: 4; transform: translateY(-1px); }
+.ev.is-active { box-shadow: 0 3px 18px rgba(0,0,0,.18); z-index: 5; }
+
+/* Left accent bar */
+.ev-accent {
+  position: absolute; left: 0; top: 0; bottom: 0; width: 3px;
+  border-radius: 3px 0 0 3px;
+}
+.ev-time { font-size: 10px; color: #6B7280; font-weight: 500; line-height: 1.2; }
+.ev-name { font-size: 12px; font-weight: 700; color: #111827; margin-top: 2px; line-height: 1.3; }
+.ev-cap { font-size: 10px; color: #9CA3AF; margin-top: 2px; }
+.ev-inst { font-size: 10px; color: #9CA3AF; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+/* Inline tags in event block */
+.ev-tag {
+  display: inline-block; font-size: 9px; font-weight: 700;
+  padding: 1px 6px; border-radius: 10px; margin-top: 3px;
+  text-transform: uppercase; letter-spacing: .4px;
+}
+.ev-tag-full { background: #FEE2E2; color: #DC2626; }
+.ev-tag-last { background: #FEF3C7; color: #B45309; }
+.ev-tag-multi { background: #EDE9FE; color: #7C3AED; }
+
+/* ── OVERLAY ── */
+#overlay {
+  display: none; position: fixed; inset: 0; z-index: 200;
+}
+#overlay.show { display: block; }
+.overlay-bg { position: absolute; inset: 0; }
+
+/* ── POPUP ── */
+#popup {
+  position: fixed; width: 448px; max-width: calc(100vw - 24px);
+  background: #fff; border-radius: 14px; border: 2px solid #7C3AED;
+  box-shadow: 0 10px 48px rgba(0,0,0,.18);
+  z-index: 201; overflow: hidden;
+  max-height: calc(100vh - 40px); overflow-y: auto;
+  transition: opacity .12s;
+}
+.popup-close {
+  position: absolute; top: 12px; right: 12px;
+  width: 28px; height: 28px; border-radius: 50%;
+  border: none; background: #F3F4F6; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  color: #6B7280; font-size: 15px; z-index: 10;
+  transition: background .13s; line-height: 1;
+}
+.popup-close:hover { background: #E5E7EB; }
+
+/* Arrow */
+.p-arrow {
+  position: absolute; width: 14px; height: 14px;
+  background: #fff; transform: rotate(45deg); z-index: 1;
+}
+
+/* ── POPUP CONTENT ── */
+.popup-body { padding: 20px; }
+
+/* Two-column layout */
+.p-cols { display: flex; gap: 16px; align-items: flex-start; }
+.p-main { flex: 1; min-width: 0; }
+.p-side {
+  flex: 0 0 100px;
+  display: flex; flex-direction: column; align-items: center;
+  gap: 6px; padding-top: 2px;
+}
+.p-side.hidden { display: none; }
+
+/* Instructor card */
+.inst-photo {
+  width: 92px; height: 92px; border-radius: 10px;
+  overflow: hidden; background: #E5E7EB;
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.inst-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.inst-initials {
+  width: 92px; height: 92px; border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 28px; font-weight: 800; color: #fff; flex-shrink: 0;
+}
+.inst-name-only { /* when no photo at all */
+  text-align: center;
+}
+.inst-name { font-size: 13px; font-weight: 700; color: #111827; text-align: center; line-height: 1.3; }
+.inst-role { font-size: 11px; color: #9CA3AF; text-align: center; margin-top: 1px; }
+
+/* Typography */
+.p-datetime { font-size: 13px; color: #6B7280; font-weight: 500; margin-bottom: 4px; line-height: 1.4; }
+.p-title {
+  font-size: 21px; font-weight: 800; color: #111827;
+  line-height: 1.2; margin-bottom: 14px; padding-right: 28px;
+  letter-spacing: -0.3px;
+}
+.p-divider { height: 1px; background: #F3F4F6; margin: 12px 0; }
+
+/* Info rows */
+.info-row { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; }
+.info-ico { font-size: 15px; width: 20px; flex-shrink: 0; padding-top: 1px; }
+.info-body { flex: 1; min-width: 0; }
+.info-label { font-size: 10px; color: #9CA3AF; font-weight: 600; text-transform: uppercase; letter-spacing: .5px; }
+.info-val { font-size: 14px; color: #111827; font-weight: 600; margin-top: 1px; }
+.price-val { font-size: 22px; font-weight: 800; letter-spacing: -0.5px; }
+
+/* Capacity bar */
+.cap-bar { height: 5px; border-radius: 3px; background: #E5E7EB; margin-top: 5px; overflow: hidden; }
+.cap-fill { height: 100%; border-radius: 3px; transition: width .3s; }
+
+/* State badges */
+.badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 5px 12px; border-radius: 20px; font-size: 13px; font-weight: 700;
+  margin-bottom: 10px;
+}
+.badge-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.badge-full { background: #FEE2E2; color: #DC2626; }
+.badge-full .badge-dot { background: #DC2626; }
+.badge-last { background: #FEF3C7; color: #B45309; }
+.badge-last .badge-dot { background: #F59E0B; }
+
+/* Description */
+.p-desc { font-size: 13px; color: #4B5563; line-height: 1.65; }
+
+/* Multi-day */
+.multi-dates-summary { font-size: 13px; color: #374151; }
+.toggle-sched {
+  display: flex; align-items: center; gap: 7px;
+  background: none; border: none; cursor: pointer;
+  color: #7C3AED; font-size: 13px; font-weight: 700;
+  padding: 10px 0 4px; width: 100%; text-align: left;
+  border-top: 1px solid #F3F4F6; margin-top: 8px;
+}
+.toggle-sched svg { flex-shrink: 0; transition: transform .2s; }
+.toggle-sched.open svg { transform: rotate(90deg); }
+.sched-list {
+  display: none; border-radius: 8px;
+  background: #F9FAFB; border: 1px solid #E5E7EB;
+  overflow: hidden; margin-top: 6px;
+}
+.sched-list.open { display: block; }
+.sched-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 8px 12px; font-size: 12px; border-bottom: 1px solid #F3F4F6;
+}
+.sched-row:last-child { border-bottom: none; }
+.sched-date { font-weight: 600; color: #374151; }
+.sched-time { color: #9CA3AF; font-weight: 500; }
+
+/* CTA */
+.popup-cta {
+  display: block; width: 100%; padding: 14px 20px;
+  border: none; border-radius: 9px;
+  font-size: 15px; font-weight: 700; cursor: pointer;
+  color: #fff; text-align: center; margin-top: 18px;
+  transition: opacity .13s, transform .1s;
+  letter-spacing: -.1px;
+}
+.popup-cta:hover:not([disabled]) { opacity: .88; transform: translateY(-1px); }
+.popup-cta[disabled] {
+  background: #D1D5DB !important; cursor: not-allowed; color: #9CA3AF;
+}
+.popup-cta.cta-full { background: #D1D5DB !important; color: #6B7280 !important; cursor: not-allowed; }
+
+/* ── MOBILE ── */
+@media (max-width: 640px) {
+  #popup {
+    position: fixed !important; left: 0 !important; right: 0 !important;
+    bottom: 0 !important; top: auto !important;
+    width: 100% !important; max-width: 100%;
+    border-radius: 18px 18px 0 0;
+    border-left: none !important; border-right: none !important; border-bottom: none !important;
+    border-top-width: 3px !important;
+    max-height: 88vh;
+  }
+  .p-arrow { display: none !important; }
+  .popup-cta { padding: 15px; }
+  .p-title { font-size: 18px; }
+  .p-side { flex: 0 0 82px; }
+  .inst-photo, .inst-initials { width: 76px; height: 76px; font-size: 22px; }
+}
+
+/* ── VARIANT LABEL (dev helper, subtle) ── */
+.v-label {
+  position: absolute; top: 4px; right: 6px;
+  font-size: 9px; font-weight: 700; color: #C4C8D0;
+  letter-spacing: .3px; pointer-events: none;
+}
+</style>
+</head>
+<body>
+<div class="app">
+
+  <!-- TOPBAR -->
+  <header class="topbar">
+    <div class="brand">Matúšov test</div>
+    <div class="week-nav">
+      <button class="nav-btn">‹</button>
+      <span class="week-label">6.7. – 12.7.2026</span>
+      <button class="nav-btn">›</button>
+    </div>
+    <div class="view-tabs">
+      <button class="view-tab">Deň</button>
+      <button class="view-tab active">Týždeň</button>
+      <button class="view-tab">Mesiac</button>
+    </div>
+  </header>
+
+  <!-- CALENDAR -->
+  <div class="cal-wrap">
+    <div class="cal-head">
+      <div class="cal-head-spacer"></div>
+      <div class="cal-day-head"><div class="day-abbr">Po</div><div class="day-num">6</div></div>
+      <div class="cal-day-head"><div class="day-abbr">Ut</div><div class="day-num">7</div></div>
+      <div class="cal-day-head"><div class="day-abbr">St</div><div class="day-num">8</div></div>
+      <div class="cal-day-head is-today"><div class="day-abbr">Št</div><div class="day-num">9</div></div>
+      <div class="cal-day-head"><div class="day-abbr">Pi</div><div class="day-num">10</div></div>
+      <div class="cal-day-head"><div class="day-abbr">So</div><div class="day-num">11</div></div>
+      <div class="cal-day-head"><div class="day-abbr">Ne</div><div class="day-num">12</div></div>
+    </div>
+    <div class="cal-body" id="calBody"></div>
+  </div>
+</div>
+
+<!-- OVERLAY & POPUP -->
+<div id="overlay">
+  <div class="overlay-bg" onclick="closePopup()"></div>
+  <div id="popup">
+    <button class="popup-close" onclick="closePopup()">✕</button>
+    <div class="p-arrow" id="pArrow"></div>
+    <div class="popup-body" id="popupBody"></div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════
+// CONFIG
+// ══════════════════════════════════════════════
+const CAL_START = 7;   // first hour shown
+const CAL_END   = 19;  // last hour (exclusive)
+const HOUR_H    = 64;  // px per hour
+const HOURS     = CAL_END - CAL_START;
+const TODAY     = 3;   // Thursday = column index 3
+
+// ══════════════════════════════════════════════
+// COURSE DATA
+// ══════════════════════════════════════════════
+const COURSES = [
+  // ── VARIANT 6 ── Ranná joga | no description
+  {
+    id: 'v6', variant: 6, day: 0,
+    start: [7,0], end: [7,55],
+    title: 'Ranná joga',
+    color: '#0EA5E9', colorBg: 'rgba(14,165,233,.07)',
+    capacity: { free: 4, total: 10, show: true },
+    price: { val: '16,90 €', show: true },
+    description: null,
+    instructor: { name: 'Petra Bakošová', role: 'Trénerka', photo: 'https://i.pravatar.cc/150?img=47', showPhoto: true, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 10 ── Zumba | last spots
+  {
+    id: 'v10', variant: 10, day: 0,
+    start: [9,0], end: [10,30],
+    title: 'Zumba',
+    color: '#F43F5E', colorBg: 'rgba(244,63,94,.06)',
+    capacity: { free: 2, total: 10, show: true },
+    price: { val: '5 €', show: true },
+    description: 'Tanec a cvičenie v jednom – zábavná hodina plná energie pre každého. Vhodné pre všetky vekové kategórie a úrovne.',
+    instructor: { name: 'Natalia Smandrova', role: 'Lektorka', photo: 'https://i.pravatar.cc/150?img=25', showPhoto: true, show: true },
+    isFull: false, isLastSpots: true, isMultiDay: false,
+  },
+
+  // ── VARIANT 4 ── Bezplatná lekcia | no price
+  {
+    id: 'v4', variant: 4, day: 1,
+    start: [17,0], end: [18,0],
+    title: 'Bezplatná ukážková lekcia',
+    color: '#F97316', colorBg: 'rgba(249,115,22,.07)',
+    capacity: { free: 12, total: 20, show: true },
+    price: { val: null, show: false },
+    description: 'Príďte sa pozrieť a vyskúšajte naše cvičenie zadarmo. Bez záväzkov, bez registrácie vopred. Stačí prísť.',
+    instructor: { name: 'Linda Vilimova', role: 'Lektorka', photo: 'https://i.pravatar.cc/150?img=49', showPhoto: true, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 7 ── Kurz nemčiny | multi-day, regular
+  {
+    id: 'v7', variant: 7, day: 2,
+    start: [15,0], end: [17,0],
+    title: 'Kurz nemčiny A1',
+    color: '#8B5CF6', colorBg: 'rgba(139,92,246,.07)',
+    capacity: { free: 6, total: 12, show: true },
+    price: { val: '200 €', show: true },
+    description: 'Kurz nemčiny pre úplných začiatočníkov. Po absolvovaní dosiahnete jazykovú úroveň A1.',
+    instructor: { name: 'Jana Kováčová', role: 'Lektorka', photo: null, showPhoto: false, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: true,
+    multiDaySummary: '10 stretnutí · 27.8. – 26.10.2026',
+    multiDayStart: '27.8. – pondelok · 15:00 – 17:00',
+    multiDayDates: [
+      { date: '27.8. – pondelok', time: '15:00 – 17:00' },
+      { date: '3.9. – pondelok',  time: '15:00 – 17:00' },
+      { date: '10.9. – pondelok', time: '15:00 – 17:00' },
+      { date: '17.9. – pondelok', time: '15:00 – 17:00' },
+      { date: '24.9. – pondelok', time: '15:00 – 17:00' },
+      { date: '1.10. – pondelok', time: '15:00 – 17:00' },
+      { date: '8.10. – pondelok', time: '15:00 – 17:00' },
+      { date: '15.10. – pondelok',time: '15:00 – 17:00' },
+      { date: '22.10. – pondelok',time: '15:00 – 17:00' },
+      { date: '26.10. – nedeľa', time: '10:00 – 12:00' },
+    ],
+  },
+
+  // ── VARIANT 1 ── HIIT tréning | all info, photo
+  {
+    id: 'v1', variant: 1, day: 3,
+    start: [12,0], end: [13,0],
+    title: 'HIIT tréning',
+    color: '#7C3AED', colorBg: 'rgba(124,58,237,.07)',
+    capacity: { free: 8, total: 10, show: true },
+    price: { val: '10 €', show: true },
+    description: 'Intenzívny intervalový tréning pre celé telo. Vhodný pre mierne pokročilých cvičencov. Prineste si fľašu s vodou a uterák.',
+    instructor: { name: 'Petra Bakošová', role: 'Trénerka', photo: 'https://i.pravatar.cc/150?img=47', showPhoto: true, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 2 ── Pilates Core | no photo, but has name
+  {
+    id: 'v2', variant: 2, day: 3,
+    start: [14,0], end: [15,0],
+    title: 'Pilates Core',
+    color: '#EC4899', colorBg: 'rgba(236,72,153,.06)',
+    capacity: { free: 5, total: 12, show: true },
+    price: { val: '12 €', show: true },
+    description: 'Posilnenie stredu tela s dôrazom na správne dýchanie a posturálne svaly. Vhodné pre všetky úrovne.',
+    instructor: { name: 'Marta Sedliacka', role: 'Trénerka', photo: null, showPhoto: false, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 9 ── Kruhový tréning | full
+  {
+    id: 'v9', variant: 9, day: 4,
+    start: [8,0], end: [8,55],
+    title: 'Kruhový tréning',
+    color: '#EF4444', colorBg: 'rgba(239,68,68,.06)',
+    capacity: { free: 0, total: 10, show: true },
+    price: { val: '16,90 €', show: true },
+    description: 'Tréning v kruhu so 6 stanovišťami. Striedanie silových a kondičných cvičení bez prestávky.',
+    instructor: { name: 'Petra Bakošová', role: 'Trénerka', photo: 'https://i.pravatar.cc/150?img=47', showPhoto: true, show: true },
+    isFull: true, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 3 ── Otvorená joga | no instructor
+  {
+    id: 'v3', variant: 3, day: 4,
+    start: [15,0], end: [16,0],
+    title: 'Otvorená joga',
+    color: '#10B981', colorBg: 'rgba(16,185,129,.07)',
+    capacity: { free: 20, total: 20, show: true },
+    price: { val: 'Od 10 €', show: true },
+    description: 'Otvorená hodina jogy pre všetkých. Bez predchádzajúcich skúseností. Prineste si vlastnú podložku.',
+    instructor: null,
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+
+  // ── VARIANT 8 ── Letný kurz angličtiny | multi-day, irregular times
+  {
+    id: 'v8', variant: 8, day: 5,
+    start: [9,0], end: [11,0],
+    title: 'Letný kurz angličtiny',
+    color: '#6366F1', colorBg: 'rgba(99,102,241,.07)',
+    capacity: { free: 3, total: 8, show: true },
+    price: { val: '180 €', show: true },
+    description: 'Intenzívny letný kurz angličtiny pre stredne pokročilých (B1). Každé stretnutie prebieha v inom čase – pozrite harmonogram.',
+    instructor: { name: 'Katka Phong', role: 'Lektorka', photo: 'https://i.pravatar.cc/150?img=38', showPhoto: true, show: true },
+    isFull: false, isLastSpots: true, isMultiDay: true,
+    multiDaySummary: '6 stretnutí · 28.8. – 18.9.2026',
+    multiDayStart: '28.8. – utorok · 9:00 – 11:00',
+    multiDayDates: [
+      { date: '28.8. – utorok',  time: '9:00 – 11:00' },
+      { date: '30.8. – štvrtok', time: '14:00 – 16:00' },
+      { date: '4.9. – utorok',   time: '10:00 – 12:00' },
+      { date: '6.9. – štvrtok',  time: '15:00 – 17:00' },
+      { date: '11.9. – utorok',  time: '9:00 – 11:00' },
+      { date: '18.9. – utorok',  time: '13:00 – 15:00' },
+    ],
+  },
+
+  // ── VARIANT 5 ── Workshop keramiky | no capacity
+  {
+    id: 'v5', variant: 5, day: 6,
+    start: [13,30], end: [16,0],
+    title: 'Workshop keramiky',
+    color: '#B45309', colorBg: 'rgba(180,83,9,.07)',
+    capacity: { free: null, total: null, show: false },
+    price: { val: '45 €', show: true },
+    description: 'Kreatívny workshop hrnčiarstva pre začiatočníkov aj pokročilých. Všetky materiály a nástroje sú zahrnuté v cene.',
+    instructor: { name: 'Ivan Krištofič', role: 'Lektor', photo: 'https://i.pravatar.cc/150?img=12', showPhoto: true, show: true },
+    isFull: false, isLastSpots: false, isMultiDay: false,
+  },
+];
+
+// ══════════════════════════════════════════════
+// HELPERS
+// ══════════════════════════════════════════════
+const fmt = (h, m) => `${h}:${String(m).padStart(2,'0')}`;
+const toY  = (h, m) => ((h - CAL_START) + m / 60) * HOUR_H;
+const durPx = (s, e) => ((e[0]*60+e[1]) - (s[0]*60+s[1])) / 60 * HOUR_H;
+
+function hexToRgba(hex, a) {
+  const r = parseInt(hex.slice(1,3),16);
+  const g = parseInt(hex.slice(3,5),16);
+  const b = parseInt(hex.slice(5,7),16);
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+function capColor(c) {
+  if (c.isFull) return '#EF4444';
+  if (c.isLastSpots) return '#F59E0B';
+  const ratio = c.capacity.free / c.capacity.total;
+  if (ratio < 0.25) return '#F97316';
+  return '#10B981';
+}
+
+// ══════════════════════════════════════════════
+// RENDER CALENDAR
+// ══════════════════════════════════════════════
+function renderCalendar() {
+  const body = document.getElementById('calBody');
+  body.innerHTML = '';
+
+  // Time column
+  const tc = document.createElement('div');
+  tc.className = 'time-col';
+  for (let h = CAL_START; h < CAL_END; h++) {
+    const t = document.createElement('div');
+    t.className = 'time-tick';
+    t.textContent = `${h}:00`;
+    tc.appendChild(t);
+  }
+  body.appendChild(tc);
+
+  // Day columns
+  for (let d = 0; d < 7; d++) {
+    const col = document.createElement('div');
+    col.className = 'day-col' + (d === TODAY ? ' is-today' : '');
+
+    // Background slots
+    for (let h = 0; h < HOURS; h++) {
+      const slot = document.createElement('div');
+      slot.className = 'hour-slot';
+      col.appendChild(slot);
+    }
+
+    // Events
+    COURSES.filter(c => c.day === d).forEach(c => {
+      col.appendChild(buildEventBlock(c));
+    });
+
+    body.appendChild(col);
+  }
+}
+
+function buildEventBlock(c) {
+  const h = Math.max(28, durPx(c.start, c.end));
+  const ev = document.createElement('div');
+  ev.className = 'ev';
+  ev.id = `ev-${c.id}`;
+  ev.style.cssText = `
+    top: ${toY(c.start[0], c.start[1])}px;
+    height: ${h}px;
+    border-color: ${c.color};
+    background: ${c.colorBg};
+  `;
+
+  // Accent bar
+  const accent = document.createElement('div');
+  accent.className = 'ev-accent';
+  accent.style.background = c.color;
+  ev.appendChild(accent);
+
+  // Content
+  let html = `<div class="ev-time">${fmt(...c.start)} – ${fmt(...c.end)}</div>`;
+  html += `<div class="ev-name">${c.title}</div>`;
+  if (h > 46) {
+    if (c.capacity.show && c.capacity.total !== null) {
+      html += `<div class="ev-cap">${c.capacity.free}/${c.capacity.total} miest</div>`;
+    }
+    if (c.instructor) {
+      html += `<div class="ev-inst">${c.instructor.name}</div>`;
+    }
+  }
+  // State tags
+  if (c.isFull) {
+    html += `<span class="ev-tag ev-tag-full">Plné</span>`;
+  } else if (c.isLastSpots) {
+    html += `<span class="ev-tag ev-tag-last">Posledné miesta</span>`;
+  } else if (c.isMultiDay) {
+    html += `<span class="ev-tag ev-tag-multi">Kurz</span>`;
+  }
+  // Variant label (subtle)
+  html += `<div class="v-label">V${c.variant}</div>`;
+
+  ev.insertAdjacentHTML('beforeend', html);
+  ev.addEventListener('click', e => { e.stopPropagation(); openPopup(c.id, ev); });
+  return ev;
+}
+
+// ══════════════════════════════════════════════
+// POPUP OPEN / CLOSE
+// ══════════════════════════════════════════════
+let activeEl = null;
+let activeCourse = null;
+
+function openPopup(id, el) {
+  // Deactivate previous
+  if (activeEl) activeEl.classList.remove('is-active');
+  activeEl = el;
+  activeCourse = COURSES.find(c => c.id === id);
+  el.classList.add('is-active');
+
+  const popup = document.getElementById('popup');
+  popup.style.borderColor = activeCourse.color;
+
+  document.getElementById('popupBody').innerHTML = buildPopupHTML(activeCourse);
+  document.getElementById('overlay').classList.add('show');
+
+  requestAnimationFrame(() => {
+    positionPopup(el, activeCourse.color);
+  });
+}
+
+function closePopup() {
+  document.getElementById('overlay').classList.remove('show');
+  if (activeEl) { activeEl.classList.remove('is-active'); activeEl = null; }
+  activeCourse = null;
+}
+
+// ══════════════════════════════════════════════
+// BUILD POPUP HTML
+// ══════════════════════════════════════════════
+function buildPopupHTML(c) {
+  const hasInstructor = c.instructor && c.instructor.show;
+  const hasPhoto = hasInstructor && c.instructor.photo && c.instructor.showPhoto;
+  const showSide = hasInstructor;
+
+  let side = '';
+  if (showSide) {
+    side = `<div class="p-side">`;
+    if (hasPhoto) {
+      side += `<div class="inst-photo">
+        <img src="${c.instructor.photo}" alt="${c.instructor.name}"
+          onerror="this.parentElement.innerHTML=initials('${c.instructor.name}','${c.color}')">
+      </div>`;
+    } else {
+      // No photo — just text (variant 2 style)
+      side += `<div class="inst-name-only" style="margin-top:8px">`;
+      side += `<svg width="32" height="32" viewBox="0 0 32 32" style="margin:0 auto 6px;display:block">
+        <circle cx="16" cy="16" r="16" fill="${c.color}22"/>
+        <text x="16" y="21" text-anchor="middle" font-size="14" font-weight="800" fill="${c.color}">${c.instructor.name.split(' ').map(w=>w[0]).join('')}</text>
+      </svg>`;
+      side += `</div>`;
+    }
+    side += `<div class="inst-name">${c.instructor.name}</div>`;
+    side += `<div class="inst-role">${c.instructor.role}</div>`;
+    side += `</div>`;
+  } else {
+    side = `<div class="p-side hidden"></div>`;
+  }
+
+  // ── MAIN column ──
+  let main = `<div class="p-main">`;
+
+  // Date / time header
+  if (c.isMultiDay) {
+    main += `<div class="p-datetime">Začína: ${c.multiDayStart}</div>`;
+  } else {
+    // Day of week (static demo data)
+    const dayNames = ['pondelok','utorok','streda','štvrtok','piatok','sobota','nedeľa'];
+    const dayNums  = ['6.7.','7.7.','8.7.','9.7.','10.7.','11.7.','12.7.'];
+    main += `<div class="p-datetime">${fmt(...c.start)} – ${fmt(...c.end)} &nbsp;·&nbsp; ${dayNames[c.day]}, ${dayNums[c.day]}</div>`;
+  }
+
+  // Title
+  main += `<div class="p-title">${c.title}</div>`;
+
+  // ── CAPACITY ──
+  if (c.capacity.show && c.capacity.total !== null) {
+    if (c.isFull) {
+      main += `<div class="badge badge-full"><span class="badge-dot"></span>Kurz je plný</div>`;
+    } else if (c.isLastSpots) {
+      main += `<div class="badge badge-last"><span class="badge-dot"></span>Posledné ${c.capacity.free} ${c.capacity.free === 1 ? 'miesto' : 'miesta'}</div>`;
+    } else {
+      const pct = Math.round((1 - c.capacity.free / c.capacity.total) * 100);
+      const cc  = capColor(c);
+      main += `<div class="info-row">
+        <div class="info-ico">👥</div>
+        <div class="info-body">
+          <div class="info-label">Kapacita</div>
+          <div class="info-val">Voľných ${c.capacity.free} z ${c.capacity.total} miest</div>
+          <div class="cap-bar"><div class="cap-fill" style="width:${pct}%;background:${cc}"></div></div>
+        </div>
+      </div>`;
+    }
+  }
+
+  // ── PRICE ──
+  if (c.price.show && c.price.val) {
+    main += `<div class="info-row">
+      <div class="info-ico">💳</div>
+      <div class="info-body">
+        <div class="info-label">Cena</div>
+        <div class="info-val price-val">${c.price.val}</div>
+      </div>
+    </div>`;
+  }
+
+  // ── MULTI-DAY block ──
+  if (c.isMultiDay) {
+    main += `<div class="info-row">
+      <div class="info-ico">📅</div>
+      <div class="info-body">
+        <div class="info-label">Trvanie kurzu</div>
+        <div class="info-val multi-dates-summary">${c.multiDaySummary}</div>
+      </div>
+    </div>`;
+
+    // Expandable schedule
+    main += `<button class="toggle-sched" id="schedBtn" onclick="toggleSched(this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 18l6-6-6-6"/>
+      </svg>
+      Zobraziť program kurzu
+    </button>
+    <div class="sched-list" id="schedList">`;
+
+    c.multiDayDates.forEach((d, i) => {
+      const isoDate = d.date;
+      main += `<div class="sched-row">
+        <span class="sched-date">${isoDate}</span>
+        <span class="sched-time">${d.time}</span>
+      </div>`;
+    });
+    main += `</div>`;
+  }
+
+  // ── DESCRIPTION ──
+  if (c.description) {
+    main += `<div class="p-divider"></div>`;
+    main += `<p class="p-desc">${c.description}</p>`;
+  }
+
+  // ── CTA ──
+  if (c.isFull) {
+    main += `<button class="popup-cta cta-full" style="background:#D1D5DB" disabled>Obsadené</button>`;
+  } else {
+    main += `<button class="popup-cta" style="background:${c.color}" onclick="alert('Rezervácia odoslaná! (demo)')">Rezervovať miesto</button>`;
+  }
+
+  main += `</div>`; // end p-main
+
+  // Combine cols
+  return `<div class="p-cols">${main}${side}</div>`;
+}
+
+// Initials fallback for broken images
+function initials(name, color) {
+  const ini = name.split(' ').map(w => w[0]).join('');
+  return `<div style="width:100%;height:100%;background:${color};display:flex;align-items:center;justify-content:center;font-size:28px;font-weight:800;color:white;font-family:system-ui">${ini}</div>`;
+}
+window.initials = initials;
+
+// ══════════════════════════════════════════════
+// POPUP POSITIONING
+// ══════════════════════════════════════════════
+function positionPopup(evEl, color) {
+  const popup  = document.getElementById('popup');
+  const arrow  = document.getElementById('pArrow');
+  const evRect = evEl.getBoundingClientRect();
+  const vw     = window.innerWidth;
+  const vh     = window.innerHeight;
+  const popW   = Math.min(448, vw - 24);
+  const popH   = popup.offsetHeight;
+  const M      = 12; // gap between event edge and popup
+
+  // Mobile → CSS bottom-sheet handles it
+  if (vw <= 640) {
+    popup.style.cssText += 'left:0;top:auto;bottom:0;width:100%;';
+    arrow.style.display = 'none';
+    return;
+  }
+
+  arrow.style.display = 'block';
+  popup.style.width = popW + 'px';
+
+  let popLeft, popTop, arrowStyle;
+
+  const arrowSize = 14;
+  const arrowOff  = 8; // how far from edge
+
+  // ── Try RIGHT ──
+  if (evRect.right + M + popW <= vw - 16) {
+    popLeft = evRect.right + M;
+    const idealTop = evRect.top + evRect.height / 2 - popH / 2;
+    popTop = clamp(idealTop, 16, vh - popH - 16);
+    const ay = clamp(evRect.top + evRect.height / 2 - popTop - arrowSize / 2, 16, popH - arrowSize - 16);
+    arrowStyle = `left:-${arrowOff}px;top:${ay}px;border-left:2px solid ${color};border-bottom:2px solid ${color};`;
+  }
+  // ── Try LEFT ──
+  else if (evRect.left - M - popW >= 16) {
+    popLeft = evRect.left - M - popW;
+    const idealTop = evRect.top + evRect.height / 2 - popH / 2;
+    popTop = clamp(idealTop, 16, vh - popH - 16);
+    const ay = clamp(evRect.top + evRect.height / 2 - popTop - arrowSize / 2, 16, popH - arrowSize - 16);
+    arrowStyle = `right:-${arrowOff}px;top:${ay}px;border-right:2px solid ${color};border-top:2px solid ${color};`;
+  }
+  // ── Try BELOW ──
+  else if (evRect.bottom + M + popH <= vh - 16) {
+    const idealLeft = evRect.left + evRect.width / 2 - popW / 2;
+    popLeft = clamp(idealLeft, 16, vw - popW - 16);
+    popTop  = evRect.bottom + M;
+    const ax = clamp(evRect.left + evRect.width / 2 - popLeft - arrowSize / 2, 16, popW - arrowSize - 16);
+    arrowStyle = `top:-${arrowOff}px;left:${ax}px;border-left:2px solid ${color};border-top:2px solid ${color};`;
+  }
+  // ── ABOVE ──
+  else {
+    const idealLeft = evRect.left + evRect.width / 2 - popW / 2;
+    popLeft = clamp(idealLeft, 16, vw - popW - 16);
+    popTop  = evRect.top - popH - M;
+    const ax = clamp(evRect.left + evRect.width / 2 - popLeft - arrowSize / 2, 16, popW - arrowSize - 16);
+    arrowStyle = `bottom:-${arrowOff}px;left:${ax}px;border-right:2px solid ${color};border-bottom:2px solid ${color};`;
+  }
+
+  popup.style.left = popLeft + 'px';
+  popup.style.top  = popTop  + 'px';
+  arrow.style.cssText = `
+    display:block;position:absolute;
+    width:${arrowSize}px;height:${arrowSize}px;
+    background:#fff;transform:rotate(45deg);
+    ${arrowStyle}
+  `;
+}
+
+function clamp(v, lo, hi) { return Math.max(lo, Math.min(hi, v)); }
+
+// ══════════════════════════════════════════════
+// TOGGLE SCHEDULE
+// ══════════════════════════════════════════════
+function toggleSched(btn) {
+  btn.classList.toggle('open');
+  const list = document.getElementById('schedList');
+  if (list) list.classList.toggle('open');
+}
+window.toggleSched = toggleSched;
+
+// Close on Escape
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closePopup(); });
+
+// ══════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════
+renderCalendar();
+</script>
+</body>
+</html>
